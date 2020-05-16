@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Tic-Tac-Toe Bot</title>
+	<meta name = "viewport" content= "width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1" >
+	<link href="ticTacToe.css" rel="stylesheet" type="text/css" >
+	<script src="./libs/JQuery/jquery3.2.1.min.js"></script>
+	<script src="./libs/PrefixFree/fullPrefixFree.js"></script>
+</head>
+<body>
+
+	<!--Top bar- for scores & names-->
+	<div class="details">
+		<span class="user">User<b>0</b><i></i></span>
+		<span class="bot"><i></i><b>0</b>Bot</span>
+		<span class="info_user">thinking</span>
+	</div>
+
+	<!--Sliding bar for showing game outcomes-->
+	<div class="outcome"><span></span></div>
+
+	<!--The XnO board-->
+	<div class="board">
+		<span class="row">
+<ins></ins> <ins></ins> <ins></ins>
+		</span>
+		<span class="row">
+<ins></ins> <ins></ins> <ins></ins>
+		</span>
+		<span class="row">
+<ins></ins> <ins></ins> <ins></ins>
+		</span>
+	</div>
+	
+	<!--The floating box, for clicking X or O-->
+	<div class="input">
+		<span class="arrow"> </span>
+		<span class="options">
+			<b>O</b><b>X</b>
+		</span>
+	</div>
+
+	<!--The bottom bar, for changing diffuculty-->
+	<div class="settings" >
+		<ins></ins>
+	
+		<span>Select Difficulty<button>Begin</button></span>
+		<span>
+			<section class="selected">Easy</section><section>Medium</section><section>Hard</section>
+		</span>
+	</div>
+
+	<!--button onclick="window.history.go()">Restart</button-->
+</body>
+<script type="text/javascript">
+
+	//handling the settings tab
+	$(".settings section").click(function(){
+		$(this).addClass("selected").siblings().removeClass("selected");
+		game.difficulty = $(this).text().toLowerCase().trim()
+	});
+	$(".settings button").click(function(){
+		$(".settings").animate({"bottom":"-100px"}, 250);
+		if(game.matches > 0){
+			swap();
+		}
+});
+
+	//the inner workings of the game
+	var game = {
+		last : "", lastClicked : "",
+		matches : 0,
+		locations : ["123","456","789","147","258","369","357","159",  "231","132",  "564","465",  "897","798",  "471","174",  "582","285",  "693","396",  "573","375",  "591","195"],
+		stats : {}, moveCount : 0,
+		difficulty : "easy", first : "",
+		botXO: "", turn: "user",
+		analysis: {
+			currMove : "", len : 0,
+board : function(){
+	return getBoardContents() }, possibleMoves : function(){
+	return getPossibleMoves() },
+results : ""
+		},
+		scores: {
+			user: 0, bot: 0
+		}
+	}
+
+	//for making a move (X or O)
+	function setInput(el, xo){
+		$("div.input").css("display","none");
+		if($(xo).css("color") != "rgb(0, 0, 0)" || (game.last != game.botXO && game.last != "") || $(el).html() != "" || (xo == game.botXO)){	
+			return 	 }
+		var txt = $(xo).text();
+		play($(el), txt);
+		if(game.analysis.possibleMoves() == 8){
+ 			game.botXO = ((txt == "X")? "O" : "X");
+		}
+		setTimeout(function(){
+			game.stats = checkWinOrDraw()
+			results();
+			bot();
+		},500);
+	}
+
+	//For handling the input box
+	function getInput(e){
+		if(game.turn != "user"){ return }
+		if($(".settings").css("bottom") != "-100px"){	  return    }
+		var curr = $(e.target);
+		game.lastClicked = curr;
+		if($(curr).html() != ""){return }
+	
+		var wid = $(document).innerWidth()
+		var he = $(document).innerHeight()
+		var x = e.pageX, y = e.pageY;
+		var locY = y+12, locX = x-(108/2);
+		var arrX = x-(12/2), arrY = y-10;
+		locX = (x < 54)? 0 : locX;
+		locX = (x > wid-108)? wid-108 : locX;
+		locY = (y > he-44)? he-44 : locY;
+		arrY = (y > he-44)? locY-24 : arrY;
+		arrX = (arrX < 0)? 0 : arrX;
+		arrX = (arrX > wid - 12)? wid-24 : arrX;
+ 		$("div.input").css("display","block");
+		$(".input").animate({"top": locY, "left": locX}, 500);
+		$(".input .arrow").animate({"left": arrX, "top": arrY, "display" : "block"}, 500);
+
+		
+		for(var i = $(".input b").length -1; i >= 0; i--){
+			if($(".input b").eq(i).text() == game.last){
+				$(".input b").eq(i).css("color","#888");
+			}else{
+				$(".input b").eq(i).css("color","#000");
+			}
+		}
+	}
+	$(".board ins").click(function(e){
+		getInput(e);
+	});
+	$(".input b").click(function(e){
+		var xo = $(this);
+		setInput(game.lastClicked, xo);
+	});
+	$(".input b").one("click", function(e){
+		$(".settings").animate({"bottom":"-100px"}, 250);
+	});
+	
+	function swap(noTimeout){
+		function reset(){
+			game.botXO = "";
+			game.last = "";
+			game.moveCount = 0;
+			if(game.first == "bot"){
+				game.first = "";
+				game.turn = "user"
+				update(true);
+				return;
+			}
+			game.first = "";
+			game.botXO = randChoice(["X","O"]);
+			game.turn = "bot";
+			game.stats = checkWinOrDraw();
+			update(true);
+			setTimeout(function(){
+				bot();
+			}, 300);
+		}
+		$(".board ins").html("");
+		$(".input b, .board ins").css("color", "black");
+		$(".user i, .bot i").text("");
+		reset();
+	}
+//	if(!confirm("Do you want to play first?\nOk = 'Yes'")){ swap(); }
+	
+	//for checking the status of the game
+	function checkWinOrDraw(arr){
+		var wins = game.locations;
+		var cells = [], cont = "";
+		var stats = {won: false, draw:false, close: false, winner:"", combo: "", aboutToWin:{
+			now: false,
+			combos: [],
+			sketch : {xo: "", playAt: "", location: ""}
+		}};
+		
+		function contentAt(i){
+			if(arr != undefined){
+				return (arr[i]);
+			}
+			return ($("div.board ins").eq(i).html().trim())
+		}
+		
+		for(var i = 9; i > 0; i--){
+			var txt = contentAt(i -1);
+			cells.unshift(txt);
+			if(txt != ""){ cont+=(txt) }
+		}
+		for(var i in wins){
+			if(stats.won == true){
+				if(arr === undefined){
+					endGame();
+				}
+				return stats;
+			}
+			var curr = contentAt(Number(wins[i].charAt(0)) -1);
+			if(curr == ""){ continue }
+			for(var x in wins[i]){
+				var nestCurr = contentAt(Number(wins[i].charAt(x)) -1);
+				if(nestCurr == "" || nestCurr != curr){ break }
+				if(x == 1){
+					if(contentAt(Number(wins[i].charAt(2)) -1) == ""){
+						stats.close = true;
+						stats.aboutToWin.sketch = {xo: "", playAt: "", location: ""};
+						stats.aboutToWin.sketch.xo = nestCurr;
+						stats.aboutToWin.sketch.playAt = (Number(wins[i].charAt(2)));
+						stats.aboutToWin.sketch.location = wins[i];
+						if(nestCurr == "X"){
+							stats.aboutToWin.combos.unshift(stats.aboutToWin.sketch);
+						}else{
+							stats.aboutToWin.combos.push(stats.aboutToWin.sketch);
+						}
+					}
+				}
+				if(x >= 2){
+					if(arr === undefined){		highlight(wins[i]);		}
+					stats.won = true;
+					stats.winner = nestCurr;
+					stats.combo = wins[i]
+				}
+			}
+		}
+		if(cont.length >= 9){
+			stats.draw = true;
+			if(arr === undefined){
+				endGame();
+			}
+			return stats;
+		}
+		return stats;
+	}
+	
+	//for making the bot analyze the game and make a move
+	function bot(){
+		var stats = game.stats;
+		var choice = game.botXO;
+		if(stats.won || stats.draw){
+			return
+		}
+		if(stats.close && game.difficulty != "easy"){
+			criticalMove();
+			return;
+		}
+		if(game.difficulty == "hard"){
+			var possible =	game.analysis.possibleMoves();
+			var depth = (possible >= 7)? 5 : 9;
+			depth = (possible == 9)? 5 : depth ;
+			var x = new deepThought(depth);
+			if(game.difficulty == "hard"){
+				var txt = $(".board ins").eq(x.ans -1).text().trim();
+				if(txt != ""){
+					var board = game.analysis.board();
+					for(var i in board){
+						if(board[i] == ""){
+							x.ans = (Number(i)+1);
+							break;
+						}
+					}
+				}
+			}
+			botPlay(x.ans);
+		//	alert(stringify(x, "Considered "+game.analysis.len+" possibilities\nOutcomes are :\n"));
+			return;
+		}
+		function criticalMove(){
+			var critStats = stats.aboutToWin;
+			var combos = critStats.combos
+			if(combos.length < 1){
+				return;
+			}
+			for(var i in combos){
+				if(combos[i].xo == choice){
+					botPlay(combos[i].playAt);
+					return;
+				}
+			}
+			botPlay(combos[0].playAt);
+		}
+		
+		var emptyBoxes = [];
+		var allBoxes = $(".board ins");
+		for(var i = 8; i>=0; i--){
+			var cont = $(".board ins").eq(i).html();
+			if(cont == ""){
+				emptyBoxes.push(i+1);
+			}
+		}
+		var which = emptyBoxes[Math.floor(Math.random() *emptyBoxes.length)];
+		botPlay(which);
+		
+		function botPlay(which){
+			play($(".board ins").eq(which -1), choice);
+			game.last = choice;
+			if(!game.stats.won && !game.stats.draw){
+				game.stats = checkWinOrDraw();
+				results();
+			}else{	endGame()	}
+		}
+	}
+	
+	//for analysing possible moves and determining the best one - hard mode only
+	var deepThought = function(max){
+		var moves = [], firstComboLength;
+		var endings = { definiteGood : [],good : [], goodClose : [], nothing : [], draw : [], badClose : [], bad : [], definiteBad : [] };
+	/*
+	var stats = {won: false, draw:false, close: false, winner:"", combo: "", aboutToWin:{
+	combos: [],
+	sketch : {xo: "", playAt: "", location: ""}
+	}};*/
+		function scanForData(stats, move, depth, topXO){
+			game.analysis.len++;
+			var cont = (stats.won || stats.draw)? false : true ;
+			move = (move +1);
+			if(stats.won){
+				var wORl = (stats.winner == game.botXO)? "good" : "bad";
+				if(depth == 1){
+					endings.definiteGood.push(move);
+				}else if(depth == 2){
+					endings.definiteBad.push(move);
+				}
+				endings[wORl].push(move);
+				return cont;
+			}
+			if(stats.close){
+				var closeData = stats.aboutToWin.combos;
+				for(var i in closeData){
+					var gORb = (closeData[i].xo == game.botXO)? "goodClose" : "badClose" ;
+					endings[gORb].push(move);
+				}
+				return cont;
+			}
+			if(stats.draw){
+				var m = move;
+				if(game.analysis.possibleMoves() == 1){
+					var board = game.analysis.board();
+					for(var i in board){
+						if(board[i] == ""){	m = (Number(i)+1);  }
+					}
+				}
+				endings.draw.push(m);
+				return cont
+			}
+			endings.nothing.push(move);
+			return cont;
+		}
+	
+		function predictNextMoves(lst, firstCh, isFirst, xo, topXO){
+			var freshAns = permute(lst, xo)
+			if(freshAns == null){
+			return; }
+			if(!has("", freshAns.board[0])){		
+		return scanForData(checkWinOrDraw(freshAns.board[0]), firstCh, 0, topXO); }
+			if(freshAns.board.length > 1 && (freshAns.board[0].constructor).toString().indexOf("Array") >= 0){
+			var res = "";
+				for(var i in freshAns.board){
+					res+=(freshAns.board[i] + " & ");
+				}
+			}else{ var res = freshAns.board }
+			if(isFirst){
+				firstComboLength = occurences("&", res) +1;
+				var xo = game.botXO;
+			}
+			var depth = (firstComboLength - occurences("&", res));
+			depth = (occurences("&", res) == 0)? depth-1 : depth ;
+		//	console.log(res+" , First : "+firstCh+"\nDepth :"+depth+", X or O :"+xo);//<<
+			var won = false;
+			if(isFirst ||depth < max && !won){
+				for(var i in freshAns.board){
+					var first = ((isFirst)? freshAns.index[i] : firstCh);
+					var stats = scanForData(checkWinOrDraw(freshAns.board[i]), first, depth, topXO);
+					if(stats == false){
+						continue; }
+					var xORo = ((xo == "X")? "O" : "X");
+					predictNextMoves(freshAns.board[i], first, false, xORo);
+				}
+			}
+		}
+		
+		function analyseData(data){
+			var pointsBot = {definiteGood : 1000, good: 2, goodClose: 2, nothing: 0, draw: -2, badClose: -2, bad: -3, definiteBad: -1000 }//if bot plays first. doesnt need two ways()
+			var pointsUser = {definiteGood : 1000, good: 10, goodClose: 5, nothing: 2, draw: 1, badClose: -20, bad: -20, definiteBad: -2000 }//if user plays first. needs two ways()
+			var points = (game.first == "user")? pointsUser : pointsBot ;
+		//	var points = {definiteGood: 10, draw: 0, definiteBad: -10};
+			var score = {};
+			var max = [];
+			for(var e in data){
+				loopArr(data[e], e);
+			}
+			function loopArr(arr, which){
+				for(var i in arr){
+					score[arr[i]] = ((score[arr[i]] === undefined)? 0 : score[arr[i]] );
+					score[arr[i]] = (score[arr[i]] + points[which]);
+				} 
+			}
+			function checkTwoWays(){
+				var scores = {}, scores2 = {};
+				var len = 0;
+				for(var i in score){
+					var x = score[i];
+					if(scores[x] === undefined){
+						scores[x] = 1;
+						continue;
+					}
+					scores[x]++;
+				}
+				for(var i in score){
+					if(Number(score[i]) >= 800){ return }
+					if(scores[score[i]] == 2){
+						continue;
+					}
+					scores2[i] = score[i];
+					len++;
+				}
+				score = (len >= 1)?scores2 : score;
+			}
+			if(game.first == "user"){
+				checkTwoWays();
+			}
+			var same = [];
+			for(var i in score){
+				if(max[0] == undefined){
+					max[0] = i;
+					continue;
+				}
+				if(score[i] > score[max[0]]){	max = [i];	}
+			}
+			for(var i in score){
+				if(score[max[0]] == score[i]){	same.push(i);	}
+			}
+			if(same.length > 0){
+				max = [randChoice(same)];
+			}
+			max[0] = (max[0] == undefined)? data.nothing[0] : max[0];
+			max[0] = (max[0] == undefined)? data.draw[0] : max[0];
+			score.ans = max[0];
+		//	data.ans = max[0];
+			return(score);
+		}
+		
+		game.analysis.len = 0;
+		predictNextMoves(game.analysis.board(), "", true, game.botXO);
+		var x = analyseData(endings);
+	//	alert(game.moveCount+"\n"+stringify(x, "Considered "+game.analysis.len+" possibilities\nOutcomes are :\n")+"\n\n"+stringify(endings));
+		return x;
+	}
+	
+	//for displaying the results
+	function results(){
+		var stats = game.stats;
+		if(stats === undefined){ return }
+		$(".outcome").css("height","0px")
+		update();
+		if(stats.draw){
+				$(".outcome").html("It's a tie<span></span>").animate({"height":"25px"}, 250);
+		}else if(stats.won){
+				$(".outcome").html(((stats.winner == game.botXO)? "Computer" : "User")+" wins<span></span>").animate({"height":"25px"}, 250);
+		}
+	}
+	
+	//for updating scores and extra info
+	function update(infoOnly){
+		var turn = game.turn.trim();
+		$(".details span").last().fadeIn(0).removeAttr("class");
+		$(".details span").last().addClass("info_"+turn);
+		$(".outcome").css("height","0px")
+		if(infoOnly){ return true}
+		if(game.stats.won){
+			var which = (game.stats.winner == game.botXO)? "bot" : "user" ;
+			game.scores[which]++;
+			$(".details ."+which).find("b").text(game.scores[which]);
+			$(".details span").last().fadeOut(0);
+		}else if(game.stats.draw){
+			$(".details span").last().fadeOut(0);
+		}
+	}
+	
+	//for terminating all event listeners and making the game static
+	function endGame(){
+		game.matches++;
+		$(".settings").animate({"bottom":"0px"}, 250)
+	}
+	
+	//for hoghlighting certain boxes
+	function highlight(boxes){
+		boxes = (typeof boxes == "list")? boxes : String(boxes).split("");
+ 		for(var i in boxes){
+ 			$(".board ins").eq(Number(boxes[i]) -1).css({"color":"green"});
+ 		}
+	}
+	
+	//for setting a choice (X or O) to a box
+	function play(pos, choice){
+		if(game.turn == "user" && choice == game.botXO){ return }
+		if(game.turn == "bot" && choice != game.botXO){ return }
+		$(pos).text(choice);
+		game.moveCount++;
+		$(".user i").text((game.botXO == "X")? "O" : "X");
+		$(".bot i").text((game.botXO == "X")? "X" : "O");
+		game.first = ((game.first == "")? game.turn : game.first );
+		game.turn = ((game.turn == "user")? "bot" : "user" );
+		update(true);
+	}
+	
+	//for converting the board's contents into an array
+	function getBoardContents(){
+		var len = 8, res = [];
+		while(len >= 0){
+			res.push($(".board ins").eq(len).html());
+			len--;
+		}
+		return(res.reverse());
+	}
+	
+	//for getting the amount of empty cells remaining on the board
+	function getPossibleMoves(){
+		var count = 0, b = game.analysis.board();
+		for(var i in b){
+			if(b[i] == ""){ count++; }
+		}
+		return count;
+	}
+	
+	//to check of an array has a key
+	function has(key, arr){
+		for(var i in arr){
+			if(arr[i] == key){ return true }
+		}
+		return false
+	}
+	
+	//to count the number of appearances of a single digit key in a array, number or string
+	function occurences(key, item){
+		item = ((item.constructor).toString().indexOf("Array") >= 0)? item.join("") : item ;
+		item = (typeof item == "number")? String(item) : item ;
+		if(typeof item != "string"){ return null }
+		key = String(key).trim();
+		var count = 0;
+		for(var i in item){
+			if(item.charAt(i) == key){ count++; }
+		}
+		return count;
+	}
+	
+	//to get the different positions a key (x or o) can take in an array (the game board)
+	function permute(board, xo){
+		var boardList = [], index = [];
+		if(board === undefined || (board.constructor).toString().indexOf("Array") < 0){ return null }
+		if(!has("",board)){ return null }
+		for(var cell in board){
+			if(board[cell] == ""){
+				var b = [];
+				for(var i in board){
+					if(i == cell){
+						b.push(xo);
+						index.push(b.length -1);
+						continue;
+					}
+					if(i != board.length){
+						b.push(board[i]);
+					}
+				}
+				boardList.push(b);
+			}
+		}
+		return {'board' : boardList, 'index' : index};
+	}
+	
+	//randomly get content from an array.
+	function randChoice(arr, i){
+		return ((i == 1)? Math.floor(Math.random() *arr.length) : arr[Math.floor(Math.random() *arr.length)]);
+	}
+	
+	//For displaying an object as a key: value string. Only used in testing and debugging
+	function stringify(dict, addi){
+ 		var y = (addi === undefined)? "" : addi ;
+ 		for(var i in dict){
+ 			y+=(i+": "+dict[i]+",\n");
+ 		}
+ 		return y;
+	}
+	
+</script>
+</html>
